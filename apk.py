@@ -80,6 +80,8 @@ class APK(object):
         self.permissions = []
         self.uses_permissions = []
         self.declared_permissions = {}
+        self.app_icon = ''
+        self.app_name = ''
         self.valid_apk = False
         self._is_signed_v2 = None
         self._v2_blocks = {}
@@ -93,6 +95,8 @@ class APK(object):
             self.__raw = bytearray(filename)
         else:
             self.__raw = bytearray(util.read(filename))
+
+        self.size = len(self.__raw)
 
         self.zip = zipfile.ZipFile(io.BytesIO(self.__raw), mode="r")
 
@@ -250,6 +254,9 @@ class APK(object):
         """
         return self.valid_apk
 
+    def get_size(self):
+        return self.size
+
     def get_filename(self):
         """
             Return the filename of the APK
@@ -264,26 +271,27 @@ class APK(object):
 
             :rtype: string
         """
-        app_name = self.get_element('application', 'label')
+        if not self.app_name:
+            self.app_name = self.get_element('application', 'label')
 
-        if not app_name:
-            app_name = self.get_element('activity', 'label', name=self.get_main_activity())
+        if not self.app_name:
+            self.app_name = self.get_element('activity', 'label', name=self.get_main_activity())
 
-        if not app_name:
+        if not self.app_name:
             raise Exception('Error extracting application name.')
 
-        if app_name.startswith("@"):
-            res_id = int(app_name[1:], 16)
+        if self.app_name.startswith("@"):
+            res_id = int(self.app_name[1:], 16)
             res_parser = self.get_android_resources()
 
             try:
-                app_name = res_parser.get_resolved_res_configs(
+                self.app_name = res_parser.get_resolved_res_configs(
                     res_id, ARSCResTableConfig.default_config()
                 )[0][1]
             except Exception as e:
                 raise Exception('Error extracting application name "%s".' % e)
 
-        return app_name
+        return self.app_name
 
     def get_icon(self, max_dpi=65536):
         """
@@ -302,28 +310,29 @@ class APK(object):
             :rtype: string
         """
 
-        app_icon = self.get_element('application', 'icon')
+        if not self.app_icon:
+            self.app_icon = self.get_element('application', 'icon')
 
-        if not app_icon:
+        if not self.app_icon:
             self.get_element('activity', 'icon', name=self.get_main_activity())
 
-        if app_icon.startswith("@"):
-            app_icon = self._resolve_icon_resource(app_icon[1:], max_dpi)
+        if self.app_icon.startswith("@"):
+            self.app_icon = self._resolve_icon_resource(self.app_icon[1:], max_dpi)
 
-        while app_icon.endswith('.xml'):
-            xml = self.get_file(app_icon)
+        while self.app_icon.endswith('.xml'):
+            xml = self.get_file(self.app_icon)
             p = AXMLPrinter(xml)
             xml = p.get_xml_obj()
             background = xml.find('foreground')
-            app_icon = list(background.attrib.values())[0]
+            self.app_icon = list(background.attrib.values())[0]
 
-            if app_icon.startswith("@"):
-                app_icon = self._resolve_icon_resource(app_icon[1:], max_dpi)
+            if self.app_icon.startswith("@"):
+                self.app_icon = self._resolve_icon_resource(self.app_icon[1:], max_dpi)
 
-        if not app_icon:
+        if not self.app_icon:
             raise Exception("Impossible to extract application icon.")
 
-        return app_icon
+        return self.app_icon
 
     def _resolve_icon_resource(self, res, max_dpi):
         res_id = int(res, 16)
@@ -342,6 +351,15 @@ class APK(object):
         except Exception as e:
             log.warning("Exception selecting application res: %s" % e)
         return res
+
+    def extract_icon(self, filename):
+        """
+            Extract application icon in `filename` location
+        :param filename: 
+        :return: 
+        """
+        with open(filename, 'wb') as f:
+            f.write(self.get_file(self.get_icon()))
 
     def get_package_name(self):
         """
