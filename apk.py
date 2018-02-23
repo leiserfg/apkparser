@@ -1,35 +1,23 @@
-from . import androconf
-from .util import read
-
-from .axml import ARSCParser, AXMLPrinter, ARSCResTableConfig
-
 import io
-from zlib import crc32
-import re
-import binascii
-import zipfile
 import logging
+import re
+import zipfile
 from struct import unpack
+from zlib import crc32
 
-# import lxml.sax
-# from xml.dom.pulldom import SAX2DOM
-
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
 # Used for reading Certificates
 from pyasn1.codec.der.decoder import decode
 from pyasn1.codec.der.encoder import encode
-from cryptography import x509
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes
+
+from . import util
+from .axml import ARSCParser, AXMLPrinter, ARSCResTableConfig
 
 NS_ANDROID_URI = 'http://schemas.android.com/apk/res/android'
 NS_ANDROID = '{http://schemas.android.com/apk/res/android}'
 
-log = logging.getLogger("androguard.apk")
-
-# def parse_lxml_dom(tree):
-#     handler = SAX2DOM()
-#     lxml.sax.saxify(tree, handler)
-#     return handler.document
+log = logging.getLogger('APKParser')
 
 
 class Error(Exception):
@@ -55,12 +43,12 @@ class APK(object):
     APK_SIG_KEY_SIGNATURE = 0x7109871a
 
     def __init__(
-        self,
-        filename,
-        raw=False,
-        magic_file=None,
-        skip_analysis=False,
-        testzip=False
+            self,
+            filename,
+            raw=False,
+            magic_file=None,
+            skip_analysis=False,
+            testzip=False
     ):
         """
             This class can access to all elements in an APK file
@@ -104,7 +92,7 @@ class APK(object):
         if raw is True:
             self.__raw = bytearray(filename)
         else:
-            self.__raw = bytearray(read(filename))
+            self.__raw = bytearray(util.read(filename))
 
         self.zip = zipfile.ZipFile(io.BytesIO(self.__raw), mode="r")
 
@@ -211,10 +199,6 @@ class APK(object):
 
                     self.valid_apk = True
 
-        self.permission_module = androconf.load_api_specific_resource_module(
-            "aosp_permissions", self.get_target_sdk_version()
-        )
-
     def __getstate__(self):
         """
         Function for pickling APK Objects.
@@ -274,24 +258,20 @@ class APK(object):
         """
         return self.filename
 
-    def get_app_name(self):
+    def get_name(self):
         """
             Return the appname of the APK
 
             :rtype: string
         """
-        main_activity_name = self.get_main_activity()
+        app_name = self.get_element('application', 'label')
 
-        app_name = self.get_element(
-            'activity', 'label', name=main_activity_name
-        )
         if not app_name:
-            app_name = self.get_element('application', 'label')
+            app_name = self.get_element('activity', 'label', name=self.get_main_activity())
 
-        if app_name is None:
-            # No App name set
-            # TODO return packagename instead?
-            return ""
+        if not app_name:
+            raise Exception('Error extracting application name.')
+
         if app_name.startswith("@"):
             res_id = int(app_name[1:], 16)
             res_parser = self.get_android_resources()
@@ -301,11 +281,11 @@ class APK(object):
                     res_id, ARSCResTableConfig.default_config()
                 )[0][1]
             except Exception as e:
-                log.warning("Exception selecting app name: %s" % e)
-                app_name = ""
+                raise Exception('Error extracting application name "%s".' % e)
+
         return app_name
 
-    def get_app_icon(self, max_dpi=65536):
+    def get_icon(self, max_dpi=65536):
         """
             Return the first non-greater density than max_dpi icon file name,
             unless exact icon resolution is set in the manifest, in which case
@@ -321,33 +301,14 @@ class APK(object):
 
             :rtype: string
         """
-        main_activity_name = self.get_main_activity()
 
-        app_icon = ''  #self.get_element('activity', 'icon', name=main_activity_name)
+        app_icon = self.get_element('application', 'icon')
 
         if not app_icon:
-            app_icon = self.get_element('application', 'icon')
-
-        # if not app_icon:
-        #     res_id = self.get_android_resources().get_res_id_by_key(
-        #         self.package, 'mipmap', 'ic_launcher'
-        #     )
-        #     if res_id:
-        #         app_icon = "@%x" % res_id
-
-        # if not app_icon:
-        #     res_id = self.get_android_resources().get_res_id_by_key(
-        #         self.package, 'drawable', 'ic_launcher'
-        #     )
-        #     if res_id:
-        #         app_icon = "@%x" % res_id
-
-        # if not app_icon:
-        #     # If the icon can not be found, return now
-        #     return None
+            self.get_element('activity', 'icon', name=self.get_main_activity())
 
         if app_icon.startswith("@"):
-            app_icon = self._resolve_icon_resource(app_icon, max_dpi)
+            app_icon = self._resolve_icon_resource(app_icon[1:], max_dpi)
 
         while app_icon.endswith('.xml'):
             xml = self.get_file(app_icon)
@@ -357,15 +318,15 @@ class APK(object):
             app_icon = list(background.attrib.values())[0]
 
             if app_icon.startswith("@"):
-                app_icon = self._resolve_icon_resource(app_icon, max_dpi)
+                app_icon = self._resolve_icon_resource(app_icon[1:], max_dpi)
+
+        if not app_icon:
+            raise Exception("Impossible to extract application icon.")
 
         return app_icon
 
     def _resolve_icon_resource(self, res, max_dpi):
-        """
-        res MUST has a @
-        """
-        res_id = int(res[1:], 16)
+        res_id = int(res, 16)
         res_parser = self.get_android_resources()
         candidates = res_parser.get_resolved_res_configs(res_id)
 
@@ -379,10 +340,10 @@ class APK(object):
                     res = file_name
                     current_dpi = dpi
         except Exception as e:
-            log.warning("Exception selecting app res: %s" % e)
+            log.warning("Exception selecting application res: %s" % e)
         return res
 
-    def get_package(self):
+    def get_package_name(self):
         """
             Return the name of the package
 
@@ -390,17 +351,17 @@ class APK(object):
         """
         return self.package
 
-    def get_androidversion_code(self):
+    def get_version_code(self):
         """
-            Return the android version code
+            Return the application version code
 
             :rtype: string
         """
         return self.androidversion["Code"]
 
-    def get_androidversion_name(self):
+    def get_version_name(self):
         """
-            Return the android version name
+            Return the application version name
 
             :rtype: string
         """
@@ -485,14 +446,14 @@ class APK(object):
                 buffer = self.zip.read(i)
                 self.files_crc32[i] = crc32(buffer)
                 # FIXME why not use the crc from the zipfile?
-                #crc = self.zip.getinfo(i).CRC
+                # crc = self.zip.getinfo(i).CRC
                 self._files[i] = self._get_file_magic_name(buffer)
 
         return self._files
 
     def _patch_magic(self, buffer, orig):
         if ("Zip" in orig) or ("DBase" in orig):
-            val = androconf.is_android_raw(buffer)
+            val = util.is_android_raw(buffer)
             if val == "APK":
                 return "Android application package file"
             elif val == "AXML":
@@ -784,7 +745,7 @@ class APK(object):
                 implied.append([READ_PHONE_STATE, None])
 
         if (WRITE_EXTERNAL_STORAGE in self.permissions or implied_WRITE_EXTERNAL_STORAGE) \
-           and READ_EXTERNAL_STORAGE not in self.permissions:
+                and READ_EXTERNAL_STORAGE not in self.permissions:
             maxSdkVersion = None
             for name, version in self.uses_permissions:
                 if name == WRITE_EXTERNAL_STORAGE:
@@ -794,33 +755,13 @@ class APK(object):
 
         if target_sdk_version < 16:
             if READ_CONTACTS in self.permissions \
-               and READ_CALL_LOG not in self.permissions:
+                    and READ_CALL_LOG not in self.permissions:
                 implied.append([READ_CALL_LOG, None])
             if WRITE_CONTACTS in self.permissions \
-               and WRITE_CALL_LOG not in self.permissions:
+                    and WRITE_CALL_LOG not in self.permissions:
                 implied.append([WRITE_CALL_LOG, None])
 
         return implied
-
-    def get_details_permissions(self):
-        """
-            Return permissions with details
-
-            :rtype: dict of {permission: [protectionLevel, label, description]}
-        """
-        l = {}
-
-        for i in self.permissions:
-            if i in self.permission_module:
-                x = self.permission_module[i]
-                l[i] = [x["protectionLevel"], x["label"], x["description"]]
-            else:
-                # FIXME: the permission might be signature, if it is defined by the app itself!
-                l[i] = [
-                    "normal", "Unknown permission from android reference",
-                    "Unknown permission from android reference"
-                ]
-        return l
 
     @DeprecationWarning
     def get_requested_permissions(self):
@@ -830,49 +771,6 @@ class APK(object):
             :rtype: list of strings
         """
         return self.get_permissions()
-
-    def get_requested_aosp_permissions(self):
-        """
-            Returns requested permissions declared within AOSP project.
-
-            :rtype: list of strings
-        """
-        aosp_permissions = []
-        all_permissions = self.get_permissions()
-        for perm in all_permissions:
-            if perm in list(self.permission_module["AOSP_PERMISSIONS"].keys()):
-                aosp_permissions.append(perm)
-        return aosp_permissions
-
-    def get_requested_aosp_permissions_details(self):
-        """
-            Returns requested aosp permissions with details.
-
-            :rtype: dictionary
-        """
-        l = {}
-        for i in self.permissions:
-            try:
-                l[i] = self.permission_module["AOSP_PERMISSIONS"][i]
-            except KeyError:
-                # if we have not found permission do nothing
-                continue
-        return l
-
-    def get_requested_third_party_permissions(self):
-        """
-            Returns list of requested permissions not declared within AOSP project.
-
-            :rtype: list of strings
-        """
-        third_party_permissions = []
-        all_permissions = self.get_permissions()
-        for perm in all_permissions:
-            if perm not in list(
-                self.permission_module["AOSP_PERMISSIONS"].keys()
-            ):
-                third_party_permissions.append(perm)
-        return third_party_permissions
 
     def get_declared_permissions(self):
         """

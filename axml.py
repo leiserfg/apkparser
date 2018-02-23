@@ -1,17 +1,14 @@
-from . import  bytecode
-
-from . import public
-
+import collections
+import logging
+from collections import defaultdict
 from struct import pack, unpack
 from xml.sax.saxutils import escape
-import collections
-from collections import defaultdict
 
-import lxml.sax
 from lxml import etree
-import logging
 
-log = logging.getLogger("androguard.axml")
+from . import util
+
+log = logging.getLogger("APKParser:AXML")
 
 ################################## AXML FORMAT ########################################
 # Translated from
@@ -20,6 +17,67 @@ log = logging.getLogger("androguard.axml")
 # Flags in the STRING Section
 SORTED_FLAG = 1 << 0
 UTF8_FLAG = 1 << 8
+
+
+class SV(object):
+    def __init__(self, size, buff):
+        self.__size = size
+        self.__value = unpack(self.__size, buff)[0]
+
+    def _get(self):
+        return pack(self.__size, self.__value)
+
+    def __str__(self):
+        return "0x%x" % self.__value
+
+    def __int__(self):
+        return self.__value
+
+    def get_value_buff(self):
+        return self._get()
+
+    def get_value(self):
+        return self.__value
+
+    def set_value(self, attr):
+        self.__value = attr
+
+
+class BuffHandle(object):
+    def __init__(self, buff):
+        self.__buff = bytearray(buff)
+        self.__idx = 0
+
+    def size(self):
+        return len(self.__buff)
+
+    def set_idx(self, idx):
+        self.__idx = idx
+
+    def get_idx(self):
+        return self.__idx
+
+    def readNullString(self, size):
+        data = self.read(size)
+        return data
+
+    def read_b(self, size):
+        return self.__buff[self.__idx:self.__idx + size]
+
+    def read_at(self, offset, size):
+        return self.__buff[offset:offset + size]
+
+    def read(self, size):
+        if isinstance(size, SV):
+            size = size.value
+
+        buff = self.__buff[self.__idx:self.__idx + size]
+        self.__idx += size
+
+        return buff
+
+    def end(self):
+        return self.__idx >= len(self.__buff)
 
 
 class StringBlock(object):
@@ -98,7 +156,7 @@ class StringBlock(object):
             return self._cache[idx]
 
         if idx < 0 or not self.m_stringOffsets or idx >= len(
-            self.m_stringOffsets
+                self.m_stringOffsets
         ):
             return ""
 
@@ -206,7 +264,7 @@ class AXMLParser(object):
         self.valid_axml = True
         self.axml_tampered = False
         self.packerwarning = False
-        self.buff = bytecode.BuffHandle(raw_buff)
+        self.buff = BuffHandle(raw_buff)
 
         axml_file, = unpack('<L', self.buff.read(4))
 
@@ -218,7 +276,7 @@ class AXMLParser(object):
                 self.axml_tampered = True
                 log.warning(
                     "AXML file has an unusual header, most malwares like doing such stuff to anti androguard! But we try to parse it anyways. Header: 0x{:08x}".
-                    format(axml_file)
+                        format(axml_file)
                 )
             else:
                 self.valid_axml = False
@@ -375,7 +433,7 @@ class AXMLParser(object):
                     else:
                         log.warning(
                             "Reached a NAMESPACE_END without having the namespace stored before? Prefix ID: {}, URI ID: {}".
-                            format(prefix, uri)
+                                format(prefix, uri)
                         )
 
                 continue
@@ -413,8 +471,8 @@ class AXMLParser(object):
 
                 # Then there are class_attributes
                 for i in range(
-                    ATTRIBUTE_IX_VALUE_TYPE, len(self.m_attributes),
-                    ATTRIBUTE_LENGHT
+                        ATTRIBUTE_IX_VALUE_TYPE, len(self.m_attributes),
+                        ATTRIBUTE_LENGHT
                 ):
                     self.m_attributes[i] = self.m_attributes[i] >> 24
 
@@ -468,7 +526,7 @@ class AXMLParser(object):
 
     def getName(self):
         if self.m_name == -1 or (
-            self.m_event != START_TAG and self.m_event != END_TAG
+                        self.m_event != START_TAG and self.m_event != END_TAG
         ):
             return u''
 
@@ -499,7 +557,7 @@ class AXMLParser(object):
                 if prefix_uri == '':
                     log.warning(
                         "Empty Namespace URI for Namespace {}.".
-                        format(prefix_str)
+                            format(prefix_str)
                     )
                     self.packerwarning = True
 
@@ -553,9 +611,9 @@ class AXMLParser(object):
         # If the result is a (null) string, we need to look it up.
         if not res:
             attr = self.m_resourceIDs[name]
-            if attr in public.SYSTEM_RESOURCES['attributes']['inverse']:
-                res = 'android:' + public.SYSTEM_RESOURCES['attributes'
-                                                          ]['inverse'][attr]
+            if attr in util.SYSTEM_RESOURCES['attributes']['inverse']:
+                res = 'android:' + util.SYSTEM_RESOURCES['attributes'
+                ]['inverse'][attr]
             else:
                 # Attach the HEX Number, so for multiple missing attributes we do not run
                 # into problems.
@@ -638,34 +696,6 @@ def complexToFloat(xcomplex):
 def long2int(l):
     if l > 0x7fffffff:
         l = (0x7fffffff & l) - 0x80000000
-    return l
-
-
-def long2str(l):
-    """Convert an integer to a string."""
-    if type(l) not in (types.IntType, types.LongType):
-        raise ValueError('the input must be an integer')
-
-    if l < 0:
-        raise ValueError('the input must be greater than 0')
-    s = ''
-    while l:
-        s = s + chr(l & 255)
-        l >>= 8
-
-    return s
-
-
-def str2long(s):
-    """Convert a string to a long integer."""
-    if type(s) not in (types.StringType, types.UnicodeType):
-        raise ValueError('the input must be a string')
-
-    l = 0
-    for i in s:
-        l <<= 8
-        l |= ord(i)
-
     return l
 
 
@@ -867,7 +897,7 @@ class ARSCParser(object):
     def __init__(self, raw_buff):
         self.analyzed = False
         self._resolved_strings = None
-        self.buff = bytecode.BuffHandle(raw_buff)
+        self.buff = BuffHandle(raw_buff)
 
         self.header = ARSCHeader(self.buff)
         self.packageCount = unpack('<i', self.buff.read(4))[0]
@@ -1039,7 +1069,7 @@ class ARSCParser(object):
 
                         c_value = self.values[package_name].setdefault(
                             locale, {
-                                "public": []
+                                "util": []
                             }
                         )
 
@@ -1050,13 +1080,13 @@ class ARSCParser(object):
                                 ate = self.packages[package_name][nb + 3 + nb_i]
 
                                 self.resource_values[ate.mResId
-                                                    ][a_res_type.config] = ate
+                                ][a_res_type.config] = ate
                                 self.resource_keys[package_name][
                                     a_res_type.get_type()
                                 ][ate.get_value()] = ate.mResId
 
                                 if ate.get_index() != -1:
-                                    c_value["public"].append(
+                                    c_value["util"].append(
                                         (
                                             a_res_type.get_type(),
                                             ate.get_value(), ate.mResId
@@ -1167,15 +1197,15 @@ class ARSCParser(object):
         self._analyse()
         return list(self.values[package_name][locale].keys())
 
-    def get_public_resources(self, package_name, locale='\x00\x00'):
+    def get_util_resources(self, package_name, locale='\x00\x00'):
         self._analyse()
 
         buff = '<?xml version="1.0" encoding="utf-8"?>\n'
         buff += '<resources>\n'
 
         try:
-            for i in self.values[package_name][locale]["public"]:
-                buff += '<public type="%s" name="%s" id="0x%08x" />\n' % (
+            for i in self.values[package_name][locale]["util"]:
+                buff += '<util type="%s" name="%s" id="0x%08x" />\n' % (
                     i[0], i[1], i[2]
                 )
         except KeyError:
@@ -1324,7 +1354,7 @@ class ARSCParser(object):
         self._analyse()
 
         try:
-            for i in self.values[package_name][locale]["public"]:
+            for i in self.values[package_name][locale]["util"]:
                 if i[2] == rid:
                     return i
         except KeyError:
@@ -1392,7 +1422,7 @@ class ARSCParser(object):
                 r[package_name][v_locale] = {}
 
                 try:
-                    for i in self.values[package_name][locale]["public"]:
+                    for i in self.values[package_name][locale]["util"]:
                         if i[0] == 'string':
                             r[package_name][v_locale][i[2]] = None
                             k[i[1]] = i[2]
@@ -1451,10 +1481,10 @@ class ARSCParser(object):
         result = collections.defaultdict(list)
 
         for res_type, configs in list(
-            self.resource_configs[package_name].items()
+                self.resource_configs[package_name].items()
         ):
             if res_type.get_package_name() == package_name and (
-                type_name is None or res_type.get_type() == type_name
+                            type_name is None or res_type.get_type() == type_name
             ):
                 result[res_type.get_type()].extend(configs)
 
@@ -1463,7 +1493,7 @@ class ARSCParser(object):
 
 class PackageContext(object):
     def __init__(
-        self, current_package, stringpool_main, mTableStrings, mKeyStrings
+            self, current_package, stringpool_main, mTableStrings, mKeyStrings
     ):
         self.stringpool_main = stringpool_main
         self.mTableStrings = mTableStrings
@@ -1502,9 +1532,9 @@ class ARSCResTablePackage(object):
         self.id = unpack('<I', buff.read(4))[0]
         self.name = buff.readNullString(256)
         self.typeStrings = unpack('<I', buff.read(4))[0]
-        self.lastPublicType = unpack('<I', buff.read(4))[0]
+        self.lastutilType = unpack('<I', buff.read(4))[0]
         self.keyStrings = unpack('<I', buff.read(4))[0]
-        self.lastPublicKey = unpack('<I', buff.read(4))[0]
+        self.lastutilKey = unpack('<I', buff.read(4))[0]
         self.mResId = self.id << 24
 
     def get_name(self):
@@ -1666,7 +1696,7 @@ class ARSCResTableEntry(object):
     See https://github.com/LineageOS/android_frameworks_base/blob/df2898d9ce306bb2fe922d3beaa34a9cf6873d27/include/androidfw/ResourceTypes.h#L1370
     """
     FLAG_COMPLEX = 1
-    FLAG_PUBLIC = 2
+    FLAG_util = 2
     FLAG_WEAK = 4
 
     def __init__(self, buff, mResId, parent=None):
@@ -1692,8 +1722,8 @@ class ARSCResTableEntry(object):
     def get_key_data(self):
         return self.key.get_data_value()
 
-    def is_public(self):
-        return (self.flags & self.FLAG.PUBLIC) != 0
+    def is_util(self):
+        return (self.flags & self.FLAG.util) != 0
 
     def is_complex(self):
         return (self.flags & self.FLAG_COMPLEX) != 0
