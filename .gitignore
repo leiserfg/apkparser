@@ -108,6 +108,6 @@ venv.bak/
 *.idea
 *.vscode
 
-# direnv stuf
+# direnv stuff
 .envrc
 .direnv
