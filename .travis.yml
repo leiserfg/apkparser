@@ -5,13 +5,14 @@ install:
 - python setup.py install
 
 python:
-  - 3.5
   - 3.6
 
 script: echo "Fake test"
 
 deploy:
   provider: pypi
+  on:
+    all_branches: true
   user: leiserfg
   password:
     - secure: >-
