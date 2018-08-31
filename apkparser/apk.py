@@ -2,26 +2,29 @@ import io
 import logging
 import re
 import zipfile
+from io import BytesIO
 from struct import unpack
 from zlib import crc32
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
+
 # Used for reading Certificates
 from pyasn1.codec.der.decoder import decode
 from pyasn1.codec.der.encoder import encode
 
 from . import util
-from .axml import ARSCParser, AXMLPrinter, ARSCResTableConfig
+from .axml import ARSCParser, ARSCResTableConfig, AXMLPrinter
 
-NS_ANDROID_URI = 'http://schemas.android.com/apk/res/android'
-NS_ANDROID = '{http://schemas.android.com/apk/res/android}'
+NS_ANDROID_URI = "http://schemas.android.com/apk/res/android"
+NS_ANDROID = "{http://schemas.android.com/apk/res/android}"
 
-log = logging.getLogger('APKParser')
+log = logging.getLogger("APKParser")
 
 
 class Error(Exception):
     """Base class for exceptions in this module."""
+
     pass
 
 
@@ -43,12 +46,7 @@ class APK(object):
     APK_SIG_KEY_SIGNATURE = 0x7109871a
 
     def __init__(
-            self,
-            filename,
-            raw=False,
-            magic_file=None,
-            skip_analysis=False,
-            testzip=False
+        self, filename, raw=False, magic_file=None, skip_analysis=False, testzip=False
     ):
         """
             This class can access to all elements in an APK file
@@ -80,8 +78,8 @@ class APK(object):
         self.permissions = []
         self.uses_permissions = []
         self.declared_permissions = {}
-        self.app_icon = ''
-        self.app_name = ''
+        self.app_icon = ""
+        self.app_name = ""
         self.valid_apk = False
         self._is_signed_v2 = None
         self._v2_blocks = {}
@@ -154,25 +152,23 @@ class APK(object):
                         NS_ANDROID + "versionName"
                     )
 
-                    for item in self.xml[i].findall('uses-permission'):
+                    for item in self.xml[i].findall("uses-permission"):
                         name = item.get(NS_ANDROID + "name")
                         self.permissions.append(name)
                         maxSdkVersion = None
                         try:
-                            maxSdkVersion = int(
-                                item.get(NS_ANDROID + 'maxSdkVersion')
-                            )
+                            maxSdkVersion = int(item.get(NS_ANDROID + "maxSdkVersion"))
                         except ValueError:
                             log.warning(
-                                item.get(NS_ANDROID + 'maxSdkVersion') +
-                                'is not a valid value for <uses-permission> maxSdkVersion'
+                                item.get(NS_ANDROID + "maxSdkVersion")
+                                + "is not a valid value for <uses-permission> maxSdkVersion"
                             )
                         except TypeError:
                             pass
                         self.uses_permissions.append([name, maxSdkVersion])
 
                     # getting details of the declared permissions
-                    for d_perm_item in self.xml[i].findall('permission'):
+                    for d_perm_item in self.xml[i].findall("permission"):
                         d_perm_name = self._get_res_string_value(
                             str(d_perm_item.get(NS_ANDROID + "name"))
                         )
@@ -183,14 +179,10 @@ class APK(object):
                             str(d_perm_item.get(NS_ANDROID + "description"))
                         )
                         d_perm_permissionGroup = self._get_res_string_value(
-                            str(
-                                d_perm_item.get(NS_ANDROID + "permissionGroup")
-                            )
+                            str(d_perm_item.get(NS_ANDROID + "permissionGroup"))
                         )
                         d_perm_protectionLevel = self._get_res_string_value(
-                            str(
-                                d_perm_item.get(NS_ANDROID + "protectionLevel")
-                            )
+                            str(d_perm_item.get(NS_ANDROID + "protectionLevel"))
                         )
 
                         d_perm_details = {
@@ -214,9 +206,9 @@ class APK(object):
         """
         # Upon pickling, we need to remove the ZipFile
         x = self.__dict__
-        x['axml'] = str(x['axml'])
-        x['xml'] = str(x['xml'])
-        del x['zip']
+        x["axml"] = str(x["axml"])
+        x["xml"] = str(x["xml"])
+        del x["zip"]
 
         return x
 
@@ -233,12 +225,12 @@ class APK(object):
         self.zip = zipfile.ZipFile(io.BytesIO(self.__raw), mode="r")
 
     def _get_res_string_value(self, string):
-        if not string.startswith('@string/'):
+        if not string.startswith("@string/"):
             return string
         string_key = string[9:]
 
         res_parser = self.get_android_resources()
-        string_value = ''
+        string_value = ""
         for package_name in res_parser.get_packages_names():
             extracted_values = res_parser.get_string(package_name, string_key)
             if extracted_values:
@@ -272,13 +264,15 @@ class APK(object):
             :rtype: string
         """
         if not self.app_name:
-            self.app_name = self.get_element('application', 'label')
+            self.app_name = self.get_element("application", "label")
 
         if not self.app_name:
-            self.app_name = self.get_element('activity', 'label', name=self.get_main_activity())
+            self.app_name = self.get_element(
+                "activity", "label", name=self.get_main_activity()
+            )
 
         if not self.app_name:
-            raise Exception('Error extracting application name.')
+            raise Exception("Error extracting application name.")
 
         if self.app_name.startswith("@"):
             res_id = int(self.app_name[1:], 16)
@@ -293,9 +287,9 @@ class APK(object):
 
         return self.app_name
 
-    def get_icon(self, max_dpi=65536):
+    def get_icon_parts(self, max_dpi=65536):
         """
-            Return the first non-greater density than max_dpi icon file name,
+            Return the first non-greater density than max_dpi icon file name background and foreground,
             unless exact icon resolution is set in the manifest, in which case
             return the exact file
 
@@ -311,20 +305,23 @@ class APK(object):
         """
 
         if not self.app_icon:
-            self.app_icon = self.get_element('application', 'icon')
-
-        if not self.app_icon:
-            self.get_element('activity', 'icon', name=self.get_main_activity())
+            self.app_icon = self.get_element("application", "icon") or self.get_element(
+                "activity", "icon", name=self.get_main_activity()
+            )
 
         if self.app_icon.startswith("@"):
             self.app_icon = self._resolve_icon_resource(self.app_icon[1:], max_dpi)
 
-        while self.app_icon.endswith('.xml'):
+        if self.app_icon.endswith(".xml"):
             xml = self.get_file(self.app_icon)
             p = AXMLPrinter(xml)
+
             xml = p.get_xml_obj()
-            background = xml.find('foreground')
-            self.app_icon = list(background.attrib.values())[0]
+
+            foreground = xml.find("foreground")
+            background = xml.find("background")
+
+            self.app_icon = list(foreground.attrib.values())[0]
 
             if self.app_icon.startswith("@"):
                 self.app_icon = self._resolve_icon_resource(self.app_icon[1:], max_dpi)
@@ -358,8 +355,23 @@ class APK(object):
         :param filename: 
         :return: 
         """
-        with open(filename, 'wb') as f:
-            f.write(self.get_file(self.get_icon()))
+        icon = self.get_icon()
+
+        icon_file = self.get_file(icon)
+
+        if icon.endswith(".xml"):
+            with open(filename, "w") as f:
+                xml = AXMLPrinter(icon_file)
+                f.write(xml.buff)
+        else:
+            with open(filename, "wb") as f:
+                f.write(icon_file)
+
+    def icon_as_png(self, destination):
+        """
+        Extract the app icon as a png file even if it is a drawable file
+        """
+        pass
 
     def get_package_name(self):
         """
@@ -557,12 +569,10 @@ class APK(object):
         :return: True if multiple dex found, otherwise False
         """
         dexre = re.compile("^classes(\d+)?.dex$")
-        return len(
-            [
-                instance
-                for instance in self.get_files() if dexre.search(instance)
-            ]
-        ) > 1
+        return (
+            len([instance for instance in self.get_files() if dexre.search(instance)])
+            > 1
+        )
 
     def get_elements(self, tag_name, attribute, with_namespace=True):
         """
@@ -572,7 +582,7 @@ class APK(object):
         :param attribute: a string which specify the attribute
         """
         for i in self.xml:
-            for item in self.xml[i].findall('.//' + tag_name):
+            for item in self.xml[i].findall(".//" + tag_name):
                 if with_namespace:
                     value = item.get(NS_ANDROID + attribute)
                 else:
@@ -613,7 +623,7 @@ class APK(object):
         for i in self.xml:
             if self.xml[i] is None:
                 continue
-            tag = self.xml[i].findall('.//' + tag_name)
+            tag = self.xml[i].findall(".//" + tag_name)
             if len(tag) == 0:
                 return None
             for item in tag:
@@ -643,14 +653,19 @@ class APK(object):
         y = set()
 
         for i in self.xml:
-            activities_and_aliases = self.xml[i].findall(".//activity") + \
-                                     self.xml[i].findall(".//activity-alias")
+            activities_and_aliases = self.xml[i].findall(".//activity") + self.xml[
+                i
+            ].findall(".//activity-alias")
 
             for item in activities_and_aliases:
                 # Some applications have more than one MAIN activity.
                 # For example: paid and free content
                 activityEnabled = item.get(NS_ANDROID + "enabled")
-                if activityEnabled is not None and activityEnabled != "" and activityEnabled == "false":
+                if (
+                    activityEnabled is not None
+                    and activityEnabled != ""
+                    and activityEnabled == "false"
+                ):
                     continue
 
                 for sitem in item.findall(".//action"):
@@ -708,17 +723,11 @@ class APK(object):
                 if self.format_value(item.get(NS_ANDROID + "name")) == name:
                     for sitem in item.findall(".//intent-filter"):
                         for ssitem in sitem.findall("action"):
-                            if ssitem.get(NS_ANDROID + "name") \
-                                    not in d["action"]:
-                                d["action"].append(
-                                    ssitem.get(NS_ANDROID + "name")
-                                )
+                            if ssitem.get(NS_ANDROID + "name") not in d["action"]:
+                                d["action"].append(ssitem.get(NS_ANDROID + "name"))
                         for ssitem in sitem.findall("category"):
-                            if ssitem.get(NS_ANDROID + "name") \
-                                    not in d["category"]:
-                                d["category"].append(
-                                    ssitem.get(NS_ANDROID + "name")
-                                )
+                            if ssitem.get(NS_ANDROID + "name") not in d["category"]:
+                                d["category"].append(ssitem.get(NS_ANDROID + "name"))
 
         if not d["action"]:
             del d["action"]
@@ -744,13 +753,13 @@ class APK(object):
         """
         target_sdk_version = self.get_effective_target_sdk_version()
 
-        READ_CALL_LOG = 'android.permission.READ_CALL_LOG'
-        READ_CONTACTS = 'android.permission.READ_CONTACTS'
-        READ_EXTERNAL_STORAGE = 'android.permission.READ_EXTERNAL_STORAGE'
-        READ_PHONE_STATE = 'android.permission.READ_PHONE_STATE'
-        WRITE_CALL_LOG = 'android.permission.WRITE_CALL_LOG'
-        WRITE_CONTACTS = 'android.permission.WRITE_CONTACTS'
-        WRITE_EXTERNAL_STORAGE = 'android.permission.WRITE_EXTERNAL_STORAGE'
+        READ_CALL_LOG = "android.permission.READ_CALL_LOG"
+        READ_CONTACTS = "android.permission.READ_CONTACTS"
+        READ_EXTERNAL_STORAGE = "android.permission.READ_EXTERNAL_STORAGE"
+        READ_PHONE_STATE = "android.permission.READ_PHONE_STATE"
+        WRITE_CALL_LOG = "android.permission.WRITE_CALL_LOG"
+        WRITE_CONTACTS = "android.permission.WRITE_CONTACTS"
+        WRITE_EXTERNAL_STORAGE = "android.permission.WRITE_EXTERNAL_STORAGE"
 
         implied = []
 
@@ -762,8 +771,9 @@ class APK(object):
             if READ_PHONE_STATE not in self.permissions:
                 implied.append([READ_PHONE_STATE, None])
 
-        if (WRITE_EXTERNAL_STORAGE in self.permissions or implied_WRITE_EXTERNAL_STORAGE) \
-                and READ_EXTERNAL_STORAGE not in self.permissions:
+        if (
+            WRITE_EXTERNAL_STORAGE in self.permissions or implied_WRITE_EXTERNAL_STORAGE
+        ) and READ_EXTERNAL_STORAGE not in self.permissions:
             maxSdkVersion = None
             for name, version in self.uses_permissions:
                 if name == WRITE_EXTERNAL_STORAGE:
@@ -772,11 +782,15 @@ class APK(object):
             implied.append([READ_EXTERNAL_STORAGE, maxSdkVersion])
 
         if target_sdk_version < 16:
-            if READ_CONTACTS in self.permissions \
-                    and READ_CALL_LOG not in self.permissions:
+            if (
+                READ_CONTACTS in self.permissions
+                and READ_CALL_LOG not in self.permissions
+            ):
                 implied.append([READ_CALL_LOG, None])
-            if WRITE_CONTACTS in self.permissions \
-                    and WRITE_CALL_LOG not in self.permissions:
+            if (
+                WRITE_CONTACTS in self.permissions
+                and WRITE_CALL_LOG not in self.permissions
+            ):
                 implied.append([WRITE_CALL_LOG, None])
 
         return implied
@@ -881,7 +895,7 @@ class APK(object):
             l = ord(l)
             tag = ord(tag)
         if tag == 0xA0:
-            cert = cert[2 + (l & 0x7F) if l & 0x80 > 1 else 2:]
+            cert = cert[2 + (l & 0x7F) if l & 0x80 > 1 else 2 :]
 
         return cert
 
@@ -909,7 +923,7 @@ class APK(object):
             :type deleted_files: None or a string
             :type new_files: a dictionnary (key:filename, value:content of the file)
         """
-        zout = zipfile.ZipFile(filename, 'w')
+        zout = zipfile.ZipFile(filename, "w")
 
         for item in self.zip.infolist():
             # Block one: deleted_files, or deleted_files and new_files
@@ -973,9 +987,7 @@ class APK(object):
                 # There is a rare case, that no resource file is supplied.
                 # Maybe it was added manually, thus we check here
                 return None
-            self.arsc["resources.arsc"] = ARSCParser(
-                self.zip.read("resources.arsc")
-            )
+            self.arsc["resources.arsc"] = ARSCParser(self.zip.read("resources.arsc"))
             return self.arsc["resources.arsc"]
 
     def is_signed(self):
@@ -1021,11 +1033,12 @@ class APK(object):
             f.seek(-20, io.SEEK_CUR)
             while f.tell() > 0:
                 f.seek(-1, io.SEEK_CUR)
-                r, = unpack('<4s', f.read(4))
+                r, = unpack("<4s", f.read(4))
                 if r == self.PK_END_OF_CENTRAL_DIR:
                     # Read central dir
-                    this_disk, disk_central, this_entries, total_entries, \
-                    size_central, offset_central = unpack('<HHHHII', f.read(16))
+                    this_disk, disk_central, this_entries, total_entries, size_central, offset_central = unpack(
+                        "<HHHHII", f.read(16)
+                    )
                     # TODO according to the standard we need to check if the
                     # end of central directory is the last item in the zip file
                     # TODO We also need to check if the central dir is exactly
@@ -1038,24 +1051,26 @@ class APK(object):
                 f.seek(-4, io.SEEK_CUR)
             if offset_central:
                 f.seek(offset_central)
-                r, = unpack('<4s', f.read(4))
+                r, = unpack("<4s", f.read(4))
                 f.seek(-4, io.SEEK_CUR)
                 assert r == self.PK_CENTRAL_DIR, "No Central Dir at specified offset"
 
                 # Go back and check if we have a magic
                 end_offset = f.tell()
                 f.seek(-24, io.SEEK_CUR)
-                size_of_block, magic = unpack('<Q16s', f.read(24))
+                size_of_block, magic = unpack("<Q16s", f.read(24))
                 self._is_signed_v2 = False
                 if magic == self.APK_SIG_MAGIC:
                     # go back size_of_blocks + 8 and read size_of_block again
                     f.seek(-(size_of_block + 8), io.SEEK_CUR)
                     size_of_block_start, = unpack("<Q", f.read(8))
-                    assert size_of_block_start == size_of_block, "Sizes at beginning and and does not match!"
+                    assert (
+                        size_of_block_start == size_of_block
+                    ), "Sizes at beginning and and does not match!"
 
                     # Store all blocks
                     while f.tell() < end_offset - 24:
-                        size, key = unpack('<QI', f.read(12))
+                        size, key = unpack("<QI", f.read(12))
                         value = f.read(size - 4)
                         self._v2_blocks[key] = value
 
@@ -1077,31 +1092,31 @@ class APK(object):
         block_bytes = self._v2_blocks[self.APK_SIG_KEY_SIGNATURE]
         block = io.BytesIO(block_bytes)
 
-        size_sequence, = unpack('<I', block.read(4))
+        size_sequence, = unpack("<I", block.read(4))
         assert size_sequence + 4 == len(
             block_bytes
         ), "size of sequence and blocksize does not match"
         while block.tell() < len(block_bytes):
-            size_signer, = unpack('<I', block.read(4))
+            size_signer, = unpack("<I", block.read(4))
 
-            len_signed_data, = unpack('<I', block.read(4))
-            len_digests, = unpack('<I', block.read(4))
+            len_signed_data, = unpack("<I", block.read(4))
+            len_digests, = unpack("<I", block.read(4))
             # Skip it for now
             block.seek(len_digests, io.SEEK_CUR)
 
-            len_certs, = unpack('<I', block.read(4))
+            len_certs, = unpack("<I", block.read(4))
             start_certs = block.tell()
             while block.tell() < start_certs + len_certs:
-                len_cert, = unpack('<I', block.read(4))
+                len_cert, = unpack("<I", block.read(4))
                 certificates.append(block.read(len_cert))
 
             # Now we have the signatures and the public key...
             # we need to read it (or at least skip it)
-            len_attr, = unpack('<I', block.read(4))
+            len_attr, = unpack("<I", block.read(4))
             block.seek(len_attr, io.SEEK_CUR)
-            len_sigs, = unpack('<I', block.read(4))
+            len_sigs, = unpack("<I", block.read(4))
             block.seek(len_sigs, io.SEEK_CUR)
-            len_publickey, = unpack('<I', block.read(4))
+            len_publickey, = unpack("<I", block.read(4))
             block.seek(len_publickey, io.SEEK_CUR)
 
         return certificates
@@ -1115,9 +1130,7 @@ class APK(object):
         """
         certs = []
         for cert in self.get_certificates_der_v2():
-            certs.append(
-                x509.load_der_x509_certificate(cert, default_backend())
-            )
+            certs.append(x509.load_der_x509_certificate(cert, default_backend()))
 
         return certs
 
