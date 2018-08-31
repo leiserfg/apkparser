@@ -1,3 +1,8 @@
-from distutils.core import setup
+from setuptools import setup
 
-setup(name="apkparser", version="1.0", packages=["apkparser"])
+setup(
+    name="apkparser",
+    version="1.0",
+    packages=["apkparser"],
+    install_requires=["pyasn1", "cryptography", "lxml", "Pillow", "cairosvg"],
+)
