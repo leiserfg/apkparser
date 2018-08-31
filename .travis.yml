@@ -1,0 +1,7 @@
+language: python
+deploy:
+  provider: pypi
+  user: leiserfg
+  password:
+    - secure: >-
+        iZc7ZntvGZhCe0pR0G3MwwRVr26A40BYejm4+20H83uhtr7lvDjN/Qra0MGc8NKbASNhKHJXt1pwu22JxSV250hYaIp/bnatGZnfHKlQ2oO5i1qOKbN/MZxnOurDxI7BowVlcHSDiXkzmhslqBW4AHs3PdGcaGl5WdwywnjL4Kz1JfrAPREezTpIOLxobC+Feye1PkPLN8rpj5ZaO1HgEWa8S0uyatGGO60YYhQaHutK9dCFsrZmT8Ruw8a22ksDoscxrbTFHgB3tH1bJGI6Gxbx0Uz+0fPAT8j8ajIzKkn+DF5jED2hYCuqYFvDG/CjmCXcBJkhqe55V466OcspvoZ+1/qZJR2RnNDdgC41PGXpawjYnVoWQzbZHqPxXXUFo4gFA/gGBQT6dbhVTPHV4z4zQ/V+cznIHpxhpOtQ8T7WVNmOL1g+m6O1zaTN2stvljblKm6UZ296Lba3lChosjzWzvyODHX7uLsYZNUqiB8kuEhQdG7ultpP4w1axmrOT1LFibbZ9cnf161yuYUGbj0HQGZmXhht5JtFtI6Z/AVdf3WqA4HSTEwMcu5+0dIKqE8y7yIP8Eyqnm8NZCxzia3Huh1GYqoSHIcs11as/m2A/KmpcgkaVEiiGcjYYp81R3++hShcm2aKLGIU/jqVOC+XkPF2S3wFDIsEyCQ4kag=
