@@ -1,19 +1,15 @@
 language: python
-# sudo false implies containerized builds
 sudo: false
 install:
-- python setup.py install
-
+  - python setup.py install
 python:
   - 3.6
-
 script: echo "Fake test"
-
 deploy:
   provider: pypi
-  on:
+  'on':
     all_branches: true
   user: leiserfg
   password:
-    - secure: >-
-        iZc7ZntvGZhCe0pR0G3MwwRVr26A40BYejm4+20H83uhtr7lvDjN/Qra0MGc8NKbASNhKHJXt1pwu22JxSV250hYaIp/bnatGZnfHKlQ2oO5i1qOKbN/MZxnOurDxI7BowVlcHSDiXkzmhslqBW4AHs3PdGcaGl5WdwywnjL4Kz1JfrAPREezTpIOLxobC+Feye1PkPLN8rpj5ZaO1HgEWa8S0uyatGGO60YYhQaHutK9dCFsrZmT8Ruw8a22ksDoscxrbTFHgB3tH1bJGI6Gxbx0Uz+0fPAT8j8ajIzKkn+DF5jED2hYCuqYFvDG/CjmCXcBJkhqe55V466OcspvoZ+1/qZJR2RnNDdgC41PGXpawjYnVoWQzbZHqPxXXUFo4gFA/gGBQT6dbhVTPHV4z4zQ/V+cznIHpxhpOtQ8T7WVNmOL1g+m6O1zaTN2stvljblKm6UZ296Lba3lChosjzWzvyODHX7uLsYZNUqiB8kuEhQdG7ultpP4w1axmrOT1LFibbZ9cnf161yuYUGbj0HQGZmXhht5JtFtI6Z/AVdf3WqA4HSTEwMcu5+0dIKqE8y7yIP8Eyqnm8NZCxzia3Huh1GYqoSHIcs11as/m2A/KmpcgkaVEiiGcjYYp81R3++hShcm2aKLGIU/jqVOC+XkPF2S3wFDIsEyCQ4kag=
+   - secure: >-
+        SkqT9hSpB1YHCfUtJwQ6U1i+dHtaW3A81pzp5JVhgzhCB65kAY1f5SZtYrEH65BP9GqnFwXfomtERRlTQRa4avmfWN8g0oy++PQ8I5XReLaqRHnuQrSmc656x+qdYlekKC8vSTgm45i0SDoigiV+oCklgd5zF1LMdzQpgdxJGBxJK2rcAHEFhGqq47yOw/2Civcw7JoZ2kcP2j0B4TgZDfwV+4AS5EGtSYWBolywGS/JuAQ7U204NCsa+02WB/6ccF04FByULSs44vS1HOBH7REpgX5txY/JDeBgk384EczObg5SZVlmiV3NXRkN8BleqPK7KUsF6edm06Cnctk9yTyR3y5NbQBsTwg8BRHWnfNXuswFj/1mT08IP3/JJbXgRxffM23it0bK9E08JboKD5GkSkfigsbt120BkFLP0NWpqtFbvYyKc3u11OzKkPiacHJcS0b3KdAhFXuEroGKlUFRSvD/V8mh5mME01hXQGSzS2KuNfhoq3OWopAsI2F8IFNlQhGWNvsCAEtIH+l34Xrr1etZo083fLAptAyAQKiELbXitEqVjtHX/RIsgmn8F6gPq2/yoHZxMSzuMUDqD6pQsPLPNetdnexnADxqDhaKurF8Q/JaSZj9eqE8kFg+y5nM6E6lkjtHPnNJ9bDq+7k/4VaxCmT9ufatHmpCAFU=
