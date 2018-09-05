@@ -15,6 +15,8 @@ from pyasn1.codec.der.encoder import encode
 
 from . import util
 from .axml import ARSCParser, ARSCResTableConfig, AXMLPrinter
+from lxml import objectify, etree
+
 
 NS_ANDROID_URI = "http://schemas.android.com/apk/res/android"
 NS_ANDROID = "{http://schemas.android.com/apk/res/android}"
@@ -34,6 +36,36 @@ class FileNotPresent(Error):
 
 class BrokenAPKError(Error):
     pass
+
+
+_xml_clean = etree.XSLT(
+    etree.fromstring(
+        """
+<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+<xsl:output indent="yes"/>
+  <xsl:strip-space elements="*"/>
+
+  <xsl:template match="node()">
+    <xsl:copy>
+      <xsl:apply-templates select="@*|node()"/>
+    </xsl:copy>
+  </xsl:template>
+
+  <xsl:template match="*" priority="1">
+    <xsl:element name="{local-name()}" namespace="">
+      <xsl:apply-templates select="@*|node()"/>
+    </xsl:element>
+  </xsl:template>
+
+  <xsl:template match="@*">
+    <xsl:attribute name="{local-name()}" namespace="">
+      <xsl:value-of select="."/>
+    </xsl:attribute>
+  </xsl:template>
+</xsl:stylesheet>
+"""
+    )
+)
 
 
 class APK(object):
@@ -139,28 +171,26 @@ class APK(object):
                             log.warning(
                                 "XML Seems to be packed, parsing is very likely to fail."
                             )
-                        self.xml[i] = self.axml[i].get_xml_obj()
+
+                        self.xml[i] = _xml_clean(self.axml[i].get_xml_obj()).getroot()
+
                     except Exception as e:
                         log.warning("reading AXML as XML failed: " + str(e))
 
                 if self.xml[i] is not None:
                     self.package = self.xml[i].get("package")
-                    self.androidversion["Code"] = self.xml[i].get(
-                        NS_ANDROID + "versionCode"
-                    )
-                    self.androidversion["Name"] = self.xml[i].get(
-                        NS_ANDROID + "versionName"
-                    )
+                    self.androidversion["Code"] = self.xml[i].get("versionCode")
+                    self.androidversion["Name"] = self.xml[i].get("versionName")
 
                     for item in self.xml[i].findall("uses-permission"):
-                        name = item.get(NS_ANDROID + "name")
+                        name = item.get("name")
                         self.permissions.append(name)
                         maxSdkVersion = None
                         try:
-                            maxSdkVersion = int(item.get(NS_ANDROID + "maxSdkVersion"))
+                            maxSdkVersion = int(item.get("maxSdkVersion"))
                         except ValueError:
                             log.warning(
-                                item.get(NS_ANDROID + "maxSdkVersion")
+                                item.get("maxSdkVersion")
                                 + "is not a valid value for <uses-permission> maxSdkVersion"
                             )
                         except TypeError:
@@ -170,19 +200,19 @@ class APK(object):
                     # getting details of the declared permissions
                     for d_perm_item in self.xml[i].findall("permission"):
                         d_perm_name = self._get_res_string_value(
-                            str(d_perm_item.get(NS_ANDROID + "name"))
+                            str(d_perm_item.get("name"))
                         )
                         d_perm_label = self._get_res_string_value(
-                            str(d_perm_item.get(NS_ANDROID + "label"))
+                            str(d_perm_item.get("label"))
                         )
                         d_perm_description = self._get_res_string_value(
-                            str(d_perm_item.get(NS_ANDROID + "description"))
+                            str(d_perm_item.get("description"))
                         )
                         d_perm_permissionGroup = self._get_res_string_value(
-                            str(d_perm_item.get(NS_ANDROID + "permissionGroup"))
+                            str(d_perm_item.get("permissionGroup"))
                         )
                         d_perm_protectionLevel = self._get_res_string_value(
-                            str(d_perm_item.get(NS_ANDROID + "protectionLevel"))
+                            str(d_perm_item.get("protectionLevel"))
                         )
 
                         d_perm_details = {
@@ -584,7 +614,7 @@ class APK(object):
         for i in self.xml:
             for item in self.xml[i].findall(".//" + tag_name):
                 if with_namespace:
-                    value = item.get(NS_ANDROID + attribute)
+                    value = item.get(attribute)
                 else:
                     value = item.get(attribute)
                 # There might be an attribute without the namespace
@@ -629,7 +659,7 @@ class APK(object):
             for item in tag:
                 skip_this_item = False
                 for attr, val in list(attribute_filter.items()):
-                    attr_val = item.get(NS_ANDROID + attr)
+                    attr_val = item.get(attr)
                     if attr_val != val:
                         skip_this_item = True
                         break
@@ -637,7 +667,7 @@ class APK(object):
                 if skip_this_item:
                     continue
 
-                value = item.get(NS_ANDROID + attribute)
+                value = item.get(attribute)
 
                 if value is not None:
                     return value
@@ -660,7 +690,7 @@ class APK(object):
             for item in activities_and_aliases:
                 # Some applications have more than one MAIN activity.
                 # For example: paid and free content
-                activityEnabled = item.get(NS_ANDROID + "enabled")
+                activityEnabled = item.get("enabled")
                 if (
                     activityEnabled is not None
                     and activityEnabled != ""
@@ -669,14 +699,14 @@ class APK(object):
                     continue
 
                 for sitem in item.findall(".//action"):
-                    val = sitem.get(NS_ANDROID + "name")
+                    val = sitem.get("name")
                     if val == "android.intent.action.MAIN":
-                        x.add(item.get(NS_ANDROID + "name"))
+                        x.add(item.get("name"))
 
                 for sitem in item.findall(".//category"):
-                    val = sitem.get(NS_ANDROID + "name")
+                    val = sitem.get("name")
                     if val == "android.intent.category.LAUNCHER":
-                        y.add(item.get(NS_ANDROID + "name"))
+                        y.add(item.get("name"))
 
         z = x.intersection(y)
         if len(z) > 0:
@@ -720,14 +750,14 @@ class APK(object):
 
         for i in self.xml:
             for item in self.xml[i].findall(".//" + category):
-                if self.format_value(item.get(NS_ANDROID + "name")) == name:
+                if self.format_value(item.get("name")) == name:
                     for sitem in item.findall(".//intent-filter"):
                         for ssitem in sitem.findall("action"):
-                            if ssitem.get(NS_ANDROID + "name") not in d["action"]:
-                                d["action"].append(ssitem.get(NS_ANDROID + "name"))
+                            if ssitem.get("name") not in d["action"]:
+                                d["action"].append(ssitem.get("name"))
                         for ssitem in sitem.findall("category"):
-                            if ssitem.get(NS_ANDROID + "name") not in d["category"]:
-                                d["category"].append(ssitem.get(NS_ANDROID + "name"))
+                            if ssitem.get("name") not in d["category"]:
+                                d["category"].append(ssitem.get("name"))
 
         if not d["action"]:
             del d["action"]
