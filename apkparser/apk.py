@@ -16,7 +16,7 @@ from pyasn1.codec.der.encoder import encode
 from . import util
 from .axml import ARSCParser, ARSCResTableConfig, AXMLPrinter
 from lxml import objectify, etree
-
+from .build_icon import build_icon
 
 NS_ANDROID_URI = "http://schemas.android.com/apk/res/android"
 NS_ANDROID = "{http://schemas.android.com/apk/res/android}"
@@ -317,7 +317,7 @@ class APK(object):
 
         return self.app_name
 
-    def get_icon_parts(self, max_dpi=65536):
+    def get_icon(self, max_dpi=65536):
         """
             Return the first non-greater density than max_dpi icon file name background and foreground,
             unless exact icon resolution is set in the manifest, in which case
@@ -342,20 +342,6 @@ class APK(object):
         if self.app_icon.startswith("@"):
             self.app_icon = self._resolve_icon_resource(self.app_icon[1:], max_dpi)
 
-        if self.app_icon.endswith(".xml"):
-            xml = self.get_file(self.app_icon)
-            p = AXMLPrinter(xml)
-
-            xml = p.get_xml_obj()
-
-            foreground = xml.find("foreground")
-            background = xml.find("background")
-
-            self.app_icon = list(foreground.attrib.values())[0]
-
-            if self.app_icon.startswith("@"):
-                self.app_icon = self._resolve_icon_resource(self.app_icon[1:], max_dpi)
-
         if not self.app_icon:
             raise Exception("Impossible to extract application icon.")
 
@@ -379,34 +365,35 @@ class APK(object):
             log.warning("Exception selecting application res: %s" % e)
         return res
 
-    def extract_icon(self, filename):
+    def extract_icon(self, filename, max_dpi=65536):
         """
-            Extract application icon in `filename` location
+        Extract application icon in `filename` location
         :param filename: 
         :return: 
         """
         icon = self.get_icon()
 
-        icon_file = self.get_file(icon)
-
         if icon.endswith(".xml"):
-            with open(filename, "w") as f:
-                xml = AXMLPrinter(icon_file)
-                f.write(xml.buff)
-        else:
-            with open(filename, "wb") as f:
-                f.write(icon_file)
+            adaptative_icon = AXMLPrinter(self.get_file(icon)).get_xml_obj()
+            parts = [
+                (adaptative_icon.find("background").values())[0],
+                (adaptative_icon.find("foreground").values())[0],
+            ]
 
-    def icon_as_png(self, destination):
-        """
-        Extract the app icon as a png file even if it is a drawable file
-        """
-        pass
+            parts = [
+                self._resolve_icon_resource(p[1:], max_dpi) if p.startswith("@") else p
+                for p in parts
+            ]
+
+        else:
+            parts = [p]
+
+        parts = [(p, None if p.startswith("#") else self.get_file(p)) for p in parts]
+        build_icon(parts, filename)
 
     def get_package_name(self):
         """
             Return the name of the package
-
             :rtype: string
         """
         return self.package
