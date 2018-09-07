@@ -1,8 +1,7 @@
-from typing import Callable, Dict
 from lxml import etree
 import cairosvg
 
-_converters: Dict[str, Callable[[etree.Element], etree.Element]] = {}
+_converters = {}  ##  Dict[str, Callable[[etree.Element], etree.Element]]
 
 
 def _conv(f):
