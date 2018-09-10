@@ -18,7 +18,9 @@ def layer_from_color(color):
 
 def _axml2png(axml):
     out = BytesIO()
-    vd2png(BytesIO(AXMLPrinter(axml).get_xml()), out)
+    vd2png(
+        BytesIO(AXMLPrinter(axml).get_xml()), out, 10
+    )  # scale to 10x for getting a hight quality icon
     return out
 
 

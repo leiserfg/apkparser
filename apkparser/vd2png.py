@@ -106,6 +106,7 @@ def vd2svg(input_file):
     return etree.tostring(root).decode("utf-8")
 
 
-def vd2png(input, output):
+def vd2png(input, output, scale):
     svg = vd2svg(input)
-    cairosvg.svg2png(bytestring=svg, write_to=output)
+
+    cairosvg.svg2png(bytestring=svg, write_to=output, scale=scale)
