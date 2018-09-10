@@ -108,4 +108,4 @@ def vd2svg(input_file):
 
 def vd2png(input, output):
     svg = vd2svg(input)
-    cairosvg.svg2png(bytearray=svg, write_to=output)
+    cairosvg.svg2png(bytestring=svg, write_to=output)
