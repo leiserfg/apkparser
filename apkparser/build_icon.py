@@ -39,7 +39,6 @@ def build_icon(parts, output_path: str):
         icon = layers[0]
     else:
         layers = [l.convert("RGBA") for l in layers]
-        print([l.size for l in layers])
         min_size = min(layers, key=lambda x: x.size).size
         layers = [l if l.size == min_size else l.resize(min_size) for l in layers]
         icon = Image.alpha_composite(*layers)
