@@ -1,6 +1,7 @@
 from .vd2png import vd2png
 from PIL import Image
 from io import BytesIO
+from .axml import AXMLPrinter
 
 
 def layer_from_color(color):
@@ -15,14 +16,19 @@ def layer_from_color(color):
     return image
 
 
+def _axml2png(axml):
+    out = BytesIO()
+    vd2png(BytesIO(AXMLPrinter(axml).get_xml()), out)
+    return out
+
+
 def build_icon(parts, output_path: str):
+
     layers = [
         layer_from_color(name)
         if name.startswith("#")
         else Image.open(
-            vd2png(BytesIO(content), BytesIO())
-            if name.endswith(".xml")
-            else BytesIO(content)
+            _axml2png(content) if name.endswith(".xml") else BytesIO(content)
         )
         for name, content in parts
     ]
@@ -31,7 +37,8 @@ def build_icon(parts, output_path: str):
         icon = layers[0]
     else:
         layers = [l.convert("RGBA") for l in layers]
-        min_size = min(layers, key=lambda x: x.size)
-        layers = [l if l.size == min_size else l.resize(min_size)]
+        print([l.size for l in layers])
+        min_size = min(layers, key=lambda x: x.size).size
+        layers = [l if l.size == min_size else l.resize(min_size) for l in layers]
         icon = Image.alpha_composite(*layers)
     icon.save(output_path)
