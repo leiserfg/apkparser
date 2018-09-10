@@ -386,7 +386,7 @@ class APK(object):
             ]
 
         else:
-            parts = [p]
+            parts = [icon]
 
         parts = [(p, None if p.startswith("#") else self.get_file(p)) for p in parts]
         build_icon(parts, filename)
