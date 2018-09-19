@@ -1,5 +1,11 @@
 from lxml import etree
 import cairosvg
+from lxml.builder import E
+from random import choices
+from string import ascii_lowercase
+from math import radians, sin, cos
+from wand.image import Image
+from io import StringIO
 
 _converters = {}  ##  Dict[str, Callable[[etree.Element], etree.Element]]
 
@@ -11,12 +17,73 @@ def _conv(f):
 
 def repl_attr_name(el, old_attr, new_attr, value_transform=lambda x: x):
     v = el.attrib.pop(old_attr, None)
+
     if v is not None:
         el.attrib[new_attr] = value_transform(v)
 
 
 def remove_dp(x):
     return x.replace("dp", "").replace("dip", "")
+
+
+def split_argb(argb):
+    return int(argb[1:3], 16) / 255, "#{}".format(argb[3:])
+
+
+@_conv
+def gradient(el):
+    a = el.attrib
+
+    svg = el.getroottree().getroot()
+    defs = (
+        svg.find("defs") or svg.append(E.defs()) or svg.find("defs")
+    )  # elements does not have setdefault :'(
+
+    type_ = a.get("type", "linear")
+    id_ = "".join(choices(ascii_lowercase, k=10))
+
+    el.tag = {"linear": "linearGradient"}[type_]
+    a["id"] = id_
+    angle = a.pop("angle", None)
+    if angle:
+        angle_rad = radians(float(angle))
+        x = cos(angle_rad) * 100
+        y = cos(angle_rad) * 100
+        # x1="0" y1="0" x2="1" y2="0.5"
+
+        a["x1"] = "{}%".format((100 if x < 0 else 0))
+
+        a["y1"] = "{}%".format(100 if y < 0 else 0)
+
+        a["x2"] = "{}%".format(x if x >= 0 else 100 + x)
+        a["y2"] = "{}%".format(x if y >= 0 else 100 + x)
+
+    # stops
+    stops = [
+        (0, el.get("startColor", None)),
+        (50, el.get("centerColor", None)),
+        (100, el.get("endColor", None)),
+    ]
+
+    for percent, color in stops:
+        if not color:
+            continue
+        # <stop offset="0%" style="stop-color: #906; stop-opacity: 1.0"/>
+        a, rgb = split_argb(color)
+        el.append(
+            E.stop(
+                offset="{}%".format(percent),
+                style="stop-color: {}; stop-opacity: {}".format(rgb, a),
+            )
+        )
+
+    parent = el.getparent()
+    if parent.tag in ["svg", "shape"]:
+        parent = E.rect(x="0%", y="0%", width="100%", height="100%")
+        svg.append(parent)
+
+    parent.set("style", "fill: url(#{})".format(id_))
+    defs.append(el)
 
 
 @_conv
@@ -103,10 +170,11 @@ def vd2svg(input_file):
     for a, v in el.items():
         root.attrib[a] = v
 
-    return etree.tostring(root).decode("utf-8")
+    return etree.tostring(root)
 
 
 def vd2png(input, output, scale):
     svg = vd2svg(input)
-
-    cairosvg.svg2png(bytestring=svg, write_to=output, scale=scale)
+    with Image(blob=svg, format="svg", resolution=480) as img:
+        img.format = "png"
+        img.save(file=output)
