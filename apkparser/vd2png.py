@@ -1,7 +1,16 @@
 from lxml import etree
 import cairosvg
 from lxml.builder import E
-from random import choices
+
+try:
+    from random import choices
+except Exception:
+    from random import choice
+
+    def choices(population, k=1, *args, **kwargs):
+        return [choice(population) for _ in range(k)]
+
+
 from string import ascii_lowercase
 from math import radians, sin, cos
 from wand.image import Image
