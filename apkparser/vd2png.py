@@ -24,11 +24,15 @@ def _conv(f):
     return f
 
 
-def repl_attr_name(el, old_attr, new_attr, value_transform=lambda x: x):
+def repl_attr_name(
+    el, old_attr, new_attr=None, value_transform=lambda x: x, default=None
+):
     v = el.attrib.pop(old_attr, None)
 
     if v is not None:
-        el.attrib[new_attr] = value_transform(v)
+        el.attrib[new_attr or old_attr] = value_transform(v)
+    elif default:
+        el.attrib[new_attr or old_attr] = default
 
 
 def remove_dp(x):
@@ -102,8 +106,8 @@ def vector(el):
     w = a.pop("viewportWidth")
     a["viewBox"] = "0 0 {} {}".format(h, w)
 
-    repl_attr_name(el, "height", "height", remove_dp)
-    repl_attr_name(el, "width", "width", remove_dp)
+    repl_attr_name(el, "height", value_transform=remove_dp, default="480px")
+    repl_attr_name(el, "width", value_transform=remove_dp, default="480px")
 
 
 @_conv
