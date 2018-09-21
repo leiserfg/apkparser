@@ -39,8 +39,12 @@ def remove_dp(x):
     return x.replace("dp", "").replace("dip", "")
 
 
-def split_argb(argb):
-    return int(argb[1:3], 16) / 255, "#{}".format(argb[3:])
+def split_argb(argb: str):
+    if not argb.startswith("#"):  # this color is a resource, so make it transparent
+        return 0, "#000000"
+    if len(arg) > 7:
+        return int(argb[1:3], 16) / 255, "#{}".format(argb[3:])
+    return 1, argb
 
 
 @_conv
@@ -100,17 +104,6 @@ def gradient(el):
 
 
 @_conv
-def vector(el):
-    a = el.attrib
-    h = a.pop("viewportHeight")
-    w = a.pop("viewportWidth")
-    a["viewBox"] = "0 0 {} {}".format(h, w)
-
-    repl_attr_name(el, "height", value_transform=remove_dp, default="480px")
-    repl_attr_name(el, "width", value_transform=remove_dp, default="480px")
-
-
-@_conv
 def group(el):
     attr = el.attrib
     rotation = attr.pop("rotation", 0)
@@ -128,6 +121,19 @@ def group(el):
 
 
 @_conv
+def solid(el):
+    el.tag = "rect"
+    for k, v in dict(x="0%", y="0%", width="100%", height="100%").items():
+        el.set(k, v)
+    fill = el.attrib.pop("color", None)
+    if fill:
+        a, rgb = split_argb(fill)
+        el.attrib["fill-opacity"] = str(a)
+        fill = "#{}".format(rgb)
+        el.attrib["fill"] = fill
+
+
+@_conv
 def path(el):
     repl_attr_name(el, "pathData", "d")
     repl_attr_name(el, "strokeWidth", "stroke-width")
@@ -138,10 +144,12 @@ def path(el):
 
     fill = el.attrib.pop("fillColor", None)
     if fill:
-        if fill.startswith("#") and len(fill) == 9:
-            el.attrib["fill-opacity"] = str(int(fill[1:3], 16) / 255.0)
-            fill = "#{}".format(fill[-6:])
-    el.attrib["fill"] = fill
+
+        if fill.startswith("#"):
+            a, rgb = split_argb(fill)
+            el.attrib["fill-opacity"] = str(a)
+            fill = "#{}".format(rgb)
+        el.attrib["fill"] = fill
 
     # missing translation
     # android:strokeAlpha
@@ -182,6 +190,14 @@ def vd2svg(input_file):
 
     for a, v in el.items():
         root.attrib[a] = v
+
+    a = root.attrib
+    h = a.pop("viewportHeight", "480")
+    w = a.pop("viewportWidth", "480")
+    a["viewBox"] = "0 0 {} {}".format(h, w)
+
+    repl_attr_name(el, "height", value_transform=remove_dp, default="480px")
+    repl_attr_name(el, "width", value_transform=remove_dp, default="480px")
 
     return etree.tostring(root)
 
