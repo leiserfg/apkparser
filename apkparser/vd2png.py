@@ -42,7 +42,7 @@ def remove_dp(x):
 def split_argb(argb: str):
     if not argb.startswith("#"):  # this color is a resource, so make it transparent
         return 0, "#000000"
-    if len(arg) > 7:
+    if len(argb) > 7:
         return int(argb[1:3], 16) / 255, "#{}".format(argb[3:])
     return 1, argb
 

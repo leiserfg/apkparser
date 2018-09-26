@@ -376,8 +376,12 @@ class APK(object):
         if icon.endswith(".xml"):
             adaptative_icon = AXMLPrinter(self.get_file(icon)).get_xml_obj()
             parts = [
-                (adaptative_icon.find("background").values())[0],
-                (adaptative_icon.find("foreground").values())[0],
+                (adaptative_icon.find("background").values())[0].replace(
+                    "android:", ""
+                ),
+                (adaptative_icon.find("foreground").values())[0].replace(
+                    "android:", ""
+                ),
             ]
 
             parts = [
@@ -387,6 +391,8 @@ class APK(object):
 
         else:
             parts = [icon]
+
+        parts = filter(None, parts)  # some app have invalide parts :'(
 
         parts = [(p, None if p.startswith("#") else self.get_file(p)) for p in parts]
         build_icon(parts, filename)
