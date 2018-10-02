@@ -28,11 +28,12 @@ def repl_attr_name(
     el, old_attr, new_attr=None, value_transform=lambda x: x, default=None
 ):
     v = el.attrib.pop(old_attr, None)
-
+    print(v)
     if v is not None:
         el.attrib[new_attr or old_attr] = value_transform(v)
     elif default:
         el.attrib[new_attr or old_attr] = default
+    print(el.attrib)
 
 
 def remove_dp(x):
@@ -196,14 +197,15 @@ def vd2svg(input_file):
     w = a.pop("viewportWidth", "480")
     a["viewBox"] = "0 0 {} {}".format(h, w)
 
-    repl_attr_name(el, "height", value_transform=remove_dp, default="480px")
-    repl_attr_name(el, "width", value_transform=remove_dp, default="480px")
+    repl_attr_name(root, "height", value_transform=remove_dp, default="480px")
+    repl_attr_name(root, "width", value_transform=remove_dp, default="480px")
 
     return etree.tostring(root)
 
 
 def vd2png(input, output, scale):
     svg = vd2svg(input)
+    print(svg)
     with Image(blob=svg, format="svg", resolution=480) as img:
         img.format = "png"
         img.save(file=output)
