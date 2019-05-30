@@ -1,5 +1,4 @@
 from lxml import etree
-import cairosvg
 from lxml.builder import E
 
 try:

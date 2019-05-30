@@ -372,17 +372,20 @@ class APK(object):
         :return: 
         """
         icon = self.get_icon()
-
         if icon.endswith(".xml"):
-            adaptative_icon = AXMLPrinter(self.get_file(icon)).get_xml_obj()
-            parts = [
-                (adaptative_icon.find("background").values())[0].replace(
-                    "android:", ""
-                ),
-                (adaptative_icon.find("foreground").values())[0].replace(
-                    "android:", ""
-                ),
-            ]
+            icon_element = AXMLPrinter(self.get_file(icon)).get_xml_obj()
+            if icon_element.tag == 'adaptative-icon':
+                parts = [
+                    (icon_element.find("background").values())[0].replace(
+                        "android:", ""
+                    ),
+                    (icon_element.find("foreground").values())[0].replace(
+                        "android:", ""
+                    ),
+                ]
+            else:
+                # should be a bitmap
+                parts = [icon_element.attrib.values()[0]]
 
             parts = [
                 self._resolve_icon_resource(p[1:], max_dpi) if p.startswith("@") else p
