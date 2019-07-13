@@ -111,3 +111,4 @@ venv.bak/
 # direnv stuff
 .envrc
 .direnv
+*.apk
