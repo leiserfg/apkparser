@@ -100,6 +100,7 @@ class Vd2PngConverter:
         defs.append(el)
 
     def conv_group(self, el):
+        el.tag = 'g'
         attr = el.attrib
         rotation = attr.pop("rotation", 0)
         pivot_x = attr.pop("pivotX", 0)
@@ -192,7 +193,6 @@ class Vd2PngConverter:
 
     def vd2png(self, input, output, scale):
         svg = self.vd2svg(input)
-
         with wand.image.Image() as image:
             with wand.color.Color('transparent') as background_color:
                 library.MagickSetBackgroundColor(image.wand, background_color.resource)
