@@ -3,16 +3,16 @@ from string import ascii_lowercase
 
 from lxml import etree
 from lxml.builder import E
-from wand.image import Image
-
+from wand.api import library
+import wand.color
+import wand.image
 try:
     from random import choices
 except Exception:
     from random import choice
+
     def choices(population, k=1, *args, **kwargs):
         return [choice(population) for _ in range(k)]
-
-
 
 
 def repl_attr_name(
@@ -35,7 +35,6 @@ class Vd2PngConverter:
         self._apk = apk
         # colors = res_parser.get_color_resources()
 
-
     def split_argb(self, argb: str):
         if len(argb) > 7:
             return int(argb[1:3], 16) / 255, "#{}".format(argb[3:])
@@ -48,11 +47,13 @@ class Vd2PngConverter:
         defs = (
             svg.find("defs") or svg.append(E.defs()) or svg.find("defs")
         )  # elements does not have setdefault :'(
-
-        type_ = a.get("type", "linear")
+        types = ["linearGradient", "radialGradient", "sweepGradient"]
+        # SweepGradient does not exist on svg but it will be here as a reminder that I need to
+        # implement it
+        type_ = int(a.get("type", 0))
         id_ = "".join(choices(ascii_lowercase, k=10))
 
-        el.tag = {"linear": "linearGradient"}[type_]
+        el.tag = types[type_]
         a["id"] = id_
         angle = a.pop("angle", None)
         if angle:
@@ -68,13 +69,16 @@ class Vd2PngConverter:
             a["x2"] = "{}%".format(x if x >= 0 else 100 + x)
             a["y2"] = "{}%".format(x if y >= 0 else 100 + x)
 
-        # stops
         stops = [
             (0, el.get("startColor", None)),
             (50, el.get("centerColor", None)),
             (100, el.get("endColor", None)),
         ]
-
+        for ch in el:
+            # just in case the gradient is a loaded resource
+            self.transform(ch)
+        child_stops = ((float(ch.get("offset")) * 100, ch.get("color")) for ch in el)
+        stops.extend(child_stops)
         for percent, color in stops:
             if not color:
                 continue
@@ -131,10 +135,18 @@ class Vd2PngConverter:
 
         fill = el.attrib.pop("fillColor", None)
         if fill:
-            a, rgb = self.split_argb(fill)
-            el.attrib["fill-opacity"] = str(a)
-            fill = rgb
-            el.attrib["fill"] = fill
+            if fill.startswith("#"):
+                a, rgb = self.split_argb(fill)
+                el.attrib["fill-opacity"] = str(a)
+                fill = rgb
+                el.attrib["fill"] = fill
+            elif fill.startswith("@"):
+                res = self._apk.get_resource_as_xml(fill)
+                el.append(res)
+                self.transform(res)
+
+            else:
+                raise ValueError("Unexpected fill value {}".format(fill))
 
         repl_attr_name(el, "fillAlpha", "fill-opacity")
         repl_attr_name(el, "strokeAlpha", "stroke-opacity")
@@ -153,7 +165,7 @@ class Vd2PngConverter:
             del el.attrib[a]
             a = etree.QName(a).localname
             el.attrib[a] = v
-        getattr(self, 'conv_' + el.tag, lambda x: x)(el)
+        getattr(self, "conv_" + el.tag, lambda x: x)(el)
 
     def vd2svg(self, input_file):
         for _, el in etree.iterparse(input_file):
@@ -180,6 +192,10 @@ class Vd2PngConverter:
 
     def vd2png(self, input, output, scale):
         svg = self.vd2svg(input)
-        with Image(blob=svg, format="svg", resolution=480) as img:
-            img.format = "png"
-            img.save(file=output)
+
+        with wand.image.Image() as image:
+            with wand.color.Color('transparent') as background_color:
+                library.MagickSetBackgroundColor(image.wand, background_color.resource)
+            image.read(blob=svg, resolution=480)
+            png_image = image.make_blob("png32")
+            output.write(png_image)

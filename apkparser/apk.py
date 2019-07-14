@@ -242,6 +242,17 @@ class APK(object):
 
         return x
 
+    def get_resource_as_xml(self, id_, which=lambda x: x[0]):
+        res_parser = self.get_android_resources()
+        if isinstance(id_, str):
+            id_ = int(id_.replace('@', ''), 16)
+        candidates = res_parser.get_resolved_res_configs(id_)
+        conf, name = which(candidates)
+        if name not in self.xml:
+            self.xml[name] = AXMLPrinter(self.get_file(name)).get_xml_obj()
+        return self.xml[name]
+
+
     def __setstate__(self, state):
         """
         Load a pickled APK Object and restore the state
@@ -376,10 +387,10 @@ class APK(object):
             icon_element = AXMLPrinter(self.get_file(icon)).get_xml_obj()
             if icon_element.tag in ('adaptative-icon', 'adaptive-icon'):
                 parts = [
-                    (icon_element.find("foreground").values())[0].replace(
+                    (icon_element.find("background").values())[0].replace(
                         "android:", ""
                     ),
-                    (icon_element.find("background").values())[0].replace(
+                    (icon_element.find("foreground").values())[0].replace(
                         "android:", ""
                     ),
                 ]
