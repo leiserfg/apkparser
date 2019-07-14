@@ -1325,7 +1325,7 @@ class ARSCParser(object):
         buff += '<resources>\n'
 
         try:
-            for i in self.values[package_name][locale]["color"]:
+            for i in self.values[package_name]['\x00\x00']["color"]:
                 buff += '<color name="%s">%s</color>\n' % (i[0], i[1])
         except KeyError:
             pass

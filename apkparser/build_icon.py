@@ -1,4 +1,4 @@
-from .vd2png import vd2png
+from .vd2png import Vd2PngConverter
 from PIL import Image
 from io import BytesIO
 from .axml import AXMLPrinter
@@ -16,21 +16,24 @@ def layer_from_color(color):
     return image
 
 
-def _axml2png(axml):
+def _axml2png(axml, apk):
     out = BytesIO()
-    vd2png(
+    converter = Vd2PngConverter(apk)
+    converter.vd2png(
         BytesIO(AXMLPrinter(axml).get_xml()), out, 10
     )  # scale to 10x for getting a hight quality icon
     return out
 
 
-def build_icon(parts, output_path: str):
+def build_icon(apk, parts, output_path: str):
 
     layers = [
         layer_from_color(name)
         if name.startswith("#")
         else Image.open(
-            _axml2png(content) if name.endswith(".xml") else BytesIO(content)
+            _axml2png(content, apk)
+            if name.endswith(".xml")
+            else BytesIO(content)
         )
         for name, content in parts
     ]

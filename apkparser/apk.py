@@ -374,31 +374,27 @@ class APK(object):
         icon = self.get_icon()
         if icon.endswith(".xml"):
             icon_element = AXMLPrinter(self.get_file(icon)).get_xml_obj()
-            if icon_element.tag == 'adaptative-icon':
+            if icon_element.tag in ('adaptative-icon', 'adaptive-icon'):
                 parts = [
-                    (icon_element.find("background").values())[0].replace(
+                    (icon_element.find("foreground").values())[0].replace(
                         "android:", ""
                     ),
-                    (icon_element.find("foreground").values())[0].replace(
+                    (icon_element.find("background").values())[0].replace(
                         "android:", ""
                     ),
                 ]
             else:
                 # should be a bitmap
                 parts = [icon_element.attrib.values()[0]]
-
             parts = [
                 self._resolve_icon_resource(p[1:], max_dpi) if p.startswith("@") else p
                 for p in parts
             ]
-
         else:
             parts = [icon]
-
         parts = filter(None, parts)  # some app have invalide parts :'(
-
         parts = [(p, None if p.startswith("#") else self.get_file(p)) for p in parts]
-        build_icon(parts, filename)
+        build_icon(self, parts, filename)
 
     def get_package_name(self):
         """
@@ -576,7 +572,7 @@ class APK(object):
 
             :rtype: a list of string 
         """
-        dexre = re.compile("classes(\d*).dex")
+        dexre = re.compile(r"classes(\d*).dex")
         return filter(lambda x: dexre.match(x), self.get_files())
 
     def get_all_dex(self):
@@ -594,7 +590,7 @@ class APK(object):
 
         :return: True if multiple dex found, otherwise False
         """
-        dexre = re.compile("^classes(\d+)?.dex$")
+        dexre = re.compile(r"^classes(\d+)?.dex$")
         return (
             len([instance for instance in self.get_files() if dexre.search(instance)])
             > 1
@@ -1177,7 +1173,7 @@ class APK(object):
 
         :rtype: List of filenames matching a Signature
         """
-        signature_expr = re.compile("^(META-INF/)(.*)(\.RSA|\.EC|\.DSA)$")
+        signature_expr = re.compile(r"^(META-INF/)(.*)(\.RSA|\.EC|\.DSA)$")
         signatures = []
 
         for i in self.get_files():
@@ -1205,7 +1201,7 @@ class APK(object):
 
         :rtype: list of bytes
         """
-        signature_expr = re.compile("^(META-INF/)(.*)(\.RSA|\.EC|\.DSA)$")
+        signature_expr = re.compile(r"^(META-INF/)(.*)(\.RSA|\.EC|\.DSA)$")
         signature_datas = []
 
         for i in self.get_files():
